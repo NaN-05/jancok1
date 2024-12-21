@@ -1,26 +1,5 @@
 require('dotenv').config();
 const { ethers } = require('ethers');
-const axios = require('axios');
-
-// Fungsi untuk mengirim notifikasi Telegram
-const sendTelegramNotification = async (message) => {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-
-  if (!botToken || !chatId) {
-    console.error('❌ Telegram bot token or chat ID not configured.');
-    return;
-  }
-
-  try {
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-    const data = { chat_id: chatId, text: message };
-    await axios.post(url, data);
-    console.log('✅ Telegram notification sent.');
-  } catch (err) {
-    console.error('❌ Failed to send Telegram notification:', err.message);
-  }
-};
 
 // Fungsi untuk memilih konfigurasi jaringan
 const getNetworkConfig = (networkName) => {
@@ -67,12 +46,6 @@ const processNetworkTransfer = async (networkName) => {
 
     console.log(`[${networkName}] 💰 Current balance: ${formattedBalance} ETH`);
 
-    // Kirim notifikasi jika ada saldo masuk
-    if (balance > 0) {
-      const message = `[${networkName.toUpperCase()}] 📥 Deposit detected!\n💰 Balance: ${formattedBalance} ETH\nWallet: ${depositWalletAddress}`;
-      await sendTelegramNotification(message);
-    }
-
     if (balance >= MIN_TRANSFER_AMOUNT) {
       console.log(`[${networkName}] ⚡ Balance meets the minimum transfer requirement.`);
       const feeData = await provider.getFeeData();
@@ -94,9 +67,6 @@ const processNetworkTransfer = async (networkName) => {
 
         console.log(`[${networkName}] ✅ Transaction confirmed in block ${receipt.blockNumber}`);
         console.log(`[${networkName}] 💸 Transferred to ${process.env.VAULT_WALLET_ADDRESS}`);
-
-        const transferMessage = `[${networkName.toUpperCase()}] ✅ Transfer completed!\n💸 Transferred: ${ethers.formatEther(balance - maxGasFee)} ETH\nTo: ${process.env.VAULT_WALLET_ADDRESS}\nBlock: ${receipt.blockNumber}`;
-        await sendTelegramNotification(transferMessage);
       } else {
         console.log(`[${networkName}] ⚠️ Insufficient balance to cover gas fees.`);
       }
