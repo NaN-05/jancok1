@@ -12,14 +12,6 @@ const getNetworkConfig = (networkName) => {
       rpcUrl: process.env.BSC_RPC_URL,
       chainId: parseInt(process.env.BSC_CHAIN_ID, 10),
     },
-    polygon: {
-      rpcUrl: process.env.POLYGON_RPC_URL,
-      chainId: parseInt(process.env.POLYGON_CHAIN_ID, 10),
-    },
-    avalanche: {
-      rpcUrl: process.env.AVALANCHE_RPC_URL,
-      chainId: parseInt(process.env.AVALANCHE_CHAIN_ID, 10),
-    },
     arbitrum: {
       rpcUrl: process.env.ARBITRUM_RPC_URL,
       chainId: parseInt(process.env.ARBITRUM_CHAIN_ID, 10),
@@ -87,7 +79,7 @@ const processNetworkTransfer = async (networkName) => {
 
 // Fungsi untuk memantau jaringan secara periodik
 const monitorNetworks = async () => {
-  const networks = ['ethereum', 'bsc', 'polygon', 'avalanche', 'arbitrum', 'base'];
+  const networks = ['ethereum', 'bsc', 'arbitrum', 'base'];
   console.log('🔄 Starting monitoring and auto-transfer process...');
 
   setInterval(async () => {
