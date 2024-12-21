@@ -1,1 +1,1 @@
-npm install ethers dotenv
+npm install dotenv ethers axios winston
