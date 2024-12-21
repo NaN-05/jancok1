@@ -34,6 +34,7 @@ const getNetworkConfig = (networkName) => {
 };
 
 const MIN_TRANSFER_AMOUNT = ethers.parseEther(process.env.MIN_TRANSFER_AMOUNT || '0.001'); // Default 0.001 ETH
+const MONITOR_INTERVAL = parseInt(process.env.MONITOR_INTERVAL || '60000', 10); // Default 60 seconds
 
 // Fungsi untuk memproses transfer di jaringan tertentu
 const processNetworkTransfer = async (networkName) => {
@@ -84,22 +85,23 @@ const processNetworkTransfer = async (networkName) => {
   }
 };
 
-// Fungsi utama untuk iterasi melalui semua jaringan
-const main = async () => {
+// Fungsi untuk memantau jaringan secara periodik
+const monitorNetworks = async () => {
   const networks = ['ethereum', 'bsc', 'polygon', 'avalanche', 'arbitrum', 'base'];
-  console.log('🔄 Starting auto-transfer process for all networks...');
+  console.log('🔄 Starting monitoring and auto-transfer process...');
 
-  for (const networkName of networks) {
-    console.log(`🌐 Processing network: ${networkName}`);
-    await processNetworkTransfer(networkName);
-  }
-
-  console.log('✅ Auto-transfer process completed for all networks.');
+  setInterval(async () => {
+    console.log('🔍 Checking balances across all networks...');
+    for (const networkName of networks) {
+      console.log(`🌐 Monitoring network: ${networkName}`);
+      await processNetworkTransfer(networkName);
+    }
+  }, MONITOR_INTERVAL);
 };
 
 // Mulai proses jika file dijalankan langsung
 if (require.main === module) {
-  main().catch((err) => {
-    console.error('❌ Error in main function:', err);
+  monitorNetworks().catch((err) => {
+    console.error('❌ Error in monitorNetworks function:', err);
   });
 }
