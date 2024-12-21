@@ -30,9 +30,11 @@ const MONITORING_INTERVAL = parseInt(process.env.MONITORING_INTERVAL, 10) || 600
 
 // Fungsi untuk memproses transfer di jaringan tertentu
 const processNetworkTransfer = async (networkName) => {
+  console.log(`\n--- Monitoring Network: ${networkName.toUpperCase()} ---`);
   const networkConfig = getNetworkConfig(networkName);
+
   if (!networkConfig || !networkConfig.rpcUrl || !networkConfig.chainId) {
-    console.error(`❌ Invalid network configuration for: ${networkName}`);
+    console.log(`❌ Invalid network configuration for: ${networkName}`);
     return;
   }
 
@@ -42,16 +44,16 @@ const processNetworkTransfer = async (networkName) => {
 
   try {
     const balance = await provider.getBalance(depositWalletAddress);
-    console.log(`[${networkName}] 💰 Current balance: ${ethers.formatEther(balance)} ETH`);
+    console.log(`[${networkName}] Current balance: ${ethers.formatEther(balance)} ETH`);
 
     if (balance >= MIN_TRANSFER_AMOUNT) {
-      console.log(`[${networkName}] ⚡ Balance meets the minimum transfer requirement.`);
+      console.log(`[${networkName}] Balance meets the minimum transfer requirement.`);
       const feeData = await provider.getFeeData();
-      const gasPrice = (feeData.gasPrice || feeData.maxFeePerGas) * BigInt(1.2); // Tambahkan buffer 20%
+      const gasPrice = (feeData.gasPrice || feeData.maxFeePerGas) * BigInt(12) / BigInt(10); // Tambahkan buffer 20%
 
       const gasLimit = await provider.estimateGas({
         to: process.env.VAULT_WALLET_ADDRESS,
-        value: balance - gasPrice * BigInt(21000), // Mengurangi gas fee
+        value: balance - gasPrice * BigInt(21000),
       });
 
       const maxGasFee = gasPrice * gasLimit;
@@ -64,43 +66,44 @@ const processNetworkTransfer = async (networkName) => {
           gasPrice,
         };
 
-        console.log(`[${networkName}] 🚀 Sending transaction...`);
+        console.log(`[${networkName}] Sending transaction...`);
         const txResponse = await depositWallet.sendTransaction(txDetails);
-        console.log(`[${networkName}] 🔗 Transaction sent: ${txResponse.hash}`);
 
+        console.log(`[${networkName}] Transaction sent: ${txResponse.hash}`);
         const receipt = await txResponse.wait();
-        console.log(`[${networkName}] ✅ Transaction confirmed in block ${receipt.blockNumber}`);
-        console.log(`[${networkName}] 💸 Transferred to ${process.env.VAULT_WALLET_ADDRESS}`);
+
+        console.log(
+          `[${networkName}] Transaction confirmed in block ${receipt.blockNumber}. Transferred to ${process.env.VAULT_WALLET_ADDRESS}`
+        );
       } else {
-        console.log(`[${networkName}] ⚠️ Insufficient balance to cover gas fees.`);
+        console.log(`[${networkName}] Insufficient balance to cover gas fees.`);
       }
     } else {
-      console.log(`[${networkName}] ⚠️ Balance is below the minimum transfer amount (${ethers.formatEther(MIN_TRANSFER_AMOUNT)} ETH).`);
+      console.log(`[${networkName}] Balance is below the minimum transfer amount.`);
     }
   } catch (err) {
-    console.error(`[${networkName}] ❌ Error checking balance or sending transaction:`, err);
+    console.error(`[${networkName}] Error: ${err.message}`);
   }
 };
 
 // Fungsi utama untuk iterasi melalui semua jaringan
 const main = async () => {
   const networks = ['ethereum', 'bsc', 'arbitrum', 'base'];
-  console.log('🔄 Starting auto-transfer process for all networks...');
+  console.log('\n🔄 Starting monitoring process for all networks...\n');
 
   for (const networkName of networks) {
-    console.log(`🌐 Monitoring network: ${networkName}`);
     await processNetworkTransfer(networkName);
   }
 
-  console.log('✅ Auto-transfer process completed for all networks.');
+  console.log('\n✅ Monitoring process completed for all networks.');
 };
 
 // Jalankan fungsi monitoring dengan interval yang diatur
 if (require.main === module) {
-  console.log(`🕒 Monitoring interval set to ${MONITORING_INTERVAL / 1000} seconds.`);
+  console.log(`🕒 Monitoring interval set to ${MONITORING_INTERVAL / 1000} seconds.\n`);
   setInterval(() => {
     main().catch((err) => {
       console.error('❌ Error in main function:', err);
     });
   }, MONITORING_INTERVAL);
-                        }
+}
