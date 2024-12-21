@@ -1,5 +1,7 @@
 require('dotenv').config();
 const { ethers } = require('ethers');
+const chalk = require('chalk');
+const ora = require('ora');
 
 // Fungsi untuk memilih konfigurasi jaringan
 const getNetworkConfig = (networkName) => {
@@ -26,13 +28,15 @@ const getNetworkConfig = (networkName) => {
 };
 
 const MIN_TRANSFER_AMOUNT = ethers.parseEther(process.env.MIN_TRANSFER_AMOUNT || '0.001'); // Default 0.001 ETH
-const MONITOR_INTERVAL = parseInt(process.env.MONITOR_INTERVAL || '60000', 10); // Default 60 seconds
+const MONITORING_INTERVAL = parseInt(process.env.MONITORING_INTERVAL, 10) || 60000; // Default 60 detik
 
 // Fungsi untuk memproses transfer di jaringan tertentu
 const processNetworkTransfer = async (networkName) => {
+  const spinner = ora(`Monitoring ${chalk.blue(networkName)}...`).start();
   const networkConfig = getNetworkConfig(networkName);
+
   if (!networkConfig || !networkConfig.rpcUrl || !networkConfig.chainId) {
-    console.error(`❌ Invalid network configuration for: ${networkName}`);
+    spinner.fail(`Invalid network configuration for: ${chalk.red(networkName)}`);
     return;
   }
 
@@ -42,14 +46,19 @@ const processNetworkTransfer = async (networkName) => {
 
   try {
     const balance = await provider.getBalance(depositWalletAddress);
-    console.log(`[${networkName}] 💰 Current balance: ${ethers.formatEther(balance)} ETH`);
+    spinner.text = `[${chalk.blue(networkName)}] Balance: ${chalk.green(ethers.formatEther(balance))} ETH`;
 
     if (balance >= MIN_TRANSFER_AMOUNT) {
-      console.log(`[${networkName}] ⚡ Balance meets the minimum transfer requirement.`);
+      spinner.succeed(`[${chalk.blue(networkName)}] Balance meets the minimum transfer requirement.`);
       const feeData = await provider.getFeeData();
-      const gasPrice = feeData.gasPrice || feeData.maxFeePerGas;
-      const gasLimit = 21000;
-      const maxGasFee = gasPrice * BigInt(gasLimit);
+      const gasPrice = (feeData.gasPrice || feeData.maxFeePerGas) * BigInt(1.2); // Tambahkan buffer 20%
+
+      const gasLimit = await provider.estimateGas({
+        to: process.env.VAULT_WALLET_ADDRESS,
+        value: balance - gasPrice * BigInt(21000),
+      });
+
+      const maxGasFee = gasPrice * gasLimit;
 
       if (balance > maxGasFee) {
         const txDetails = {
@@ -59,41 +68,46 @@ const processNetworkTransfer = async (networkName) => {
           gasPrice,
         };
 
-        console.log(`[${networkName}] 🚀 Sending transaction...`);
+        spinner.start(`[${chalk.blue(networkName)}] Sending transaction...`);
         const txResponse = await depositWallet.sendTransaction(txDetails);
-        console.log(`[${networkName}] 🔗 Transaction sent: ${txResponse.hash}`);
 
+        spinner.text = `[${chalk.blue(networkName)}] Transaction sent: ${chalk.cyan(txResponse.hash)}`;
         const receipt = await txResponse.wait();
-        console.log(`[${networkName}] ✅ Transaction confirmed in block ${receipt.blockNumber}`);
-        console.log(`[${networkName}] 💸 Transferred to ${process.env.VAULT_WALLET_ADDRESS}`);
+
+        spinner.succeed(
+          `[${chalk.blue(networkName)}] Transaction confirmed in block ${chalk.yellow(
+            receipt.blockNumber
+          )}. Transferred to ${chalk.green(process.env.VAULT_WALLET_ADDRESS)}`
+        );
       } else {
-        console.log(`[${networkName}] ⚠️ Insufficient balance to cover gas fees.`);
+        spinner.warn(`[${chalk.blue(networkName)}] Insufficient balance to cover gas fees.`);
       }
     } else {
-      console.log(`[${networkName}] ⚠️ Balance is below the minimum transfer amount (${ethers.formatEther(MIN_TRANSFER_AMOUNT)} ETH).`);
+      spinner.warn(`[${chalk.blue(networkName)}] Balance is below the minimum transfer amount.`);
     }
   } catch (err) {
-    console.error(`[${networkName}] ❌ Error checking balance or sending transaction:`, err);
+    spinner.fail(`[${chalk.blue(networkName)}] Error: ${chalk.red(err.message)}`);
   }
 };
 
-// Fungsi untuk memantau jaringan secara periodik
-const monitorNetworks = async () => {
+// Fungsi utama untuk iterasi melalui semua jaringan
+const main = async () => {
   const networks = ['ethereum', 'bsc', 'arbitrum', 'base'];
-  console.log('🔄 Starting monitoring and auto-transfer process...');
+  console.log(chalk.bold.green('🔄 Starting monitoring process for all networks...\n'));
 
-  setInterval(async () => {
-    console.log('🔍 Checking balances across all networks...');
-    for (const networkName of networks) {
-      console.log(`🌐 Monitoring network: ${networkName}`);
-      await processNetworkTransfer(networkName);
-    }
-  }, MONITOR_INTERVAL);
+  for (const networkName of networks) {
+    await processNetworkTransfer(networkName);
+  }
+
+  console.log(chalk.bold.green('\n✅ Monitoring process completed for all networks.'));
 };
 
-// Mulai proses jika file dijalankan langsung
+// Jalankan fungsi monitoring dengan interval yang diatur
 if (require.main === module) {
-  monitorNetworks().catch((err) => {
-    console.error('❌ Error in monitorNetworks function:', err);
-  });
+  console.log(chalk.bold.yellow(`🕒 Monitoring interval set to ${MONITORING_INTERVAL / 1000} seconds.\n`));
+  setInterval(() => {
+    main().catch((err) => {
+      console.error(chalk.bold.red('❌ Error in main function:'), err);
+    });
+  }, MONITORING_INTERVAL);
 }
