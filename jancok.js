@@ -1,6 +1,22 @@
 require('dotenv').config();
 const { ethers } = require('ethers');
 const axios = require('axios'); // Untuk mengirim notifikasi Telegram
+const fs = require('fs');
+const path = require('path');
+const winston = require('winston');
+
+// Konfigurasi logger menggunakan winston
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`)
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'transfer-log.log' }),
+  ],
+});
 
 // Konfigurasi warna terminal
 const green = (text) => `\x1b[32m${text}\x1b[0m`; // Warna hijau
@@ -51,24 +67,25 @@ const validateEnvVariables = () => {
 
   requiredEnvVars.forEach((key) => {
     if (!process.env[key]) {
-      console.error(red(`❌ Missing environment variable: ${key}`));
-      process.exit(1); // Keluar jika ada variable yang hilang
+      logger.error(`Missing environment variable: ${key}`);
+      process.exit(1);
     }
   });
 
   if (!ethers.isAddress(process.env.VAULT_WALLET_ADDRESS)) {
-    console.error(red(`❌ Invalid VAULT_WALLET_ADDRESS: ${process.env.VAULT_WALLET_ADDRESS}`));
+    logger.error(`Invalid VAULT_WALLET_ADDRESS: ${process.env.VAULT_WALLET_ADDRESS}`);
     process.exit(1);
   }
 
-  if (!ethers.isAddress(new ethers.Wallet(process.env.DEPOSIT_WALLET_PRIVATE_KEY).address)) {
-    console.error(red(`❌ Invalid DEPOSIT_WALLET_PRIVATE_KEY.`));
+  try {
+    new ethers.Wallet(process.env.DEPOSIT_WALLET_PRIVATE_KEY);
+  } catch (err) {
+    logger.error(`Invalid DEPOSIT_WALLET_PRIVATE_KEY.`);
     process.exit(1);
   }
 
-  // Opsional: Periksa Telegram bot token dan chat ID
   if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
-    console.warn(red(`⚠️ Telegram notification is disabled. Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID.`));
+    logger.warn(`Telegram notification is disabled. Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID.`);
   }
 };
 
@@ -77,9 +94,8 @@ const sendTelegramNotification = async (message) => {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
 
-  // Jika botToken atau chatId tidak diatur, notifikasi tidak akan dikirim
   if (!botToken || !chatId) {
-    console.log(green(`[NOTIFICATION] Telegram notification skipped: Missing credentials.`));
+    logger.info(`Telegram notification skipped: Missing credentials.`);
     return;
   }
 
@@ -90,9 +106,9 @@ const sendTelegramNotification = async (message) => {
       chat_id: chatId,
       text: message,
     });
-    console.log(green(`[NOTIFICATION] Telegram message sent: ${message}`));
+    logger.info(`Telegram message sent: ${message}`);
   } catch (err) {
-    console.error(red(`[NOTIFICATION] Failed to send Telegram message: ${err.message}`));
+    logger.error(`Failed to send Telegram message: ${err.message}`);
   }
 };
 
@@ -100,7 +116,7 @@ const sendTelegramNotification = async (message) => {
 const processNetworkTransfer = async (networkName) => {
   const networkConfig = getNetworkConfig(networkName);
   if (!networkConfig || !networkConfig.rpcUrl || !networkConfig.chainId) {
-    console.error(red(`❌ Invalid network configuration for: ${networkName}`));
+    logger.error(`Invalid network configuration for: ${networkName}`);
     return;
   }
 
@@ -112,10 +128,10 @@ const processNetworkTransfer = async (networkName) => {
     const balance = await provider.getBalance(depositWalletAddress);
     const formattedBalance = ethers.formatEther(balance);
 
-    console.log(green(`[${networkName.toUpperCase()}] 💰 Current balance: ${formattedBalance} ETH`));
+    logger.info(`[${networkName.toUpperCase()}] Current balance: ${formattedBalance} ETH`);
 
     if (balance >= MIN_TRANSFER_AMOUNT) {
-      console.log(green(`[${networkName.toUpperCase()}] ⚡ Balance meets the minimum transfer requirement.`));
+      logger.info(`[${networkName.toUpperCase()}] Balance meets the minimum transfer requirement.`);
       const feeData = await provider.getFeeData();
       const gasPrice = feeData.gasPrice || feeData.maxFeePerGas;
       const gasLimit = 21000;
@@ -129,25 +145,24 @@ const processNetworkTransfer = async (networkName) => {
           gasPrice,
         };
 
-        console.log(bold(green(`[${networkName.toUpperCase()}] 🚀 Sending transaction...`)));
+        logger.info(`[${networkName.toUpperCase()}] Sending transaction...`);
         const txResponse = await depositWallet.sendTransaction(txDetails);
         const receipt = await txResponse.wait();
 
-        console.log(green(`[${networkName.toUpperCase()}] ✅ Transaction confirmed in block ${receipt.blockNumber}`));
-        console.log(green(`[${networkName.toUpperCase()}] 💸 Transferred to ${process.env.VAULT_WALLET_ADDRESS}`));
+        logger.info(`[${networkName.toUpperCase()}] Transaction confirmed in block ${receipt.blockNumber}`);
+        logger.info(`[${networkName.toUpperCase()}] Transferred to ${process.env.VAULT_WALLET_ADDRESS}`);
 
-        // Kirim notifikasi
         await sendTelegramNotification(
           `✅ [${networkName.toUpperCase()}]\nTransaction confirmed!\nBlock: ${receipt.blockNumber}\nAmount: ${formattedBalance} ETH`
         );
       } else {
-        console.log(red(`[${networkName.toUpperCase()}] ⚠️ Insufficient balance to cover gas fees.`));
+        logger.warn(`[${networkName.toUpperCase()}] Insufficient balance to cover gas fees.`);
       }
     } else {
-      console.log(red(`[${networkName.toUpperCase()}] ⚠️ Balance is below the minimum transfer amount.`));
+      logger.warn(`[${networkName.toUpperCase()}] Balance is below the minimum transfer amount.`);
     }
   } catch (err) {
-    console.error(red(`[${networkName.toUpperCase()}] ❌ Error: ${err.message}`));
+    logger.error(`[${networkName.toUpperCase()}] Error: ${err.message}`);
   }
 };
 
@@ -157,21 +172,21 @@ const main = async () => {
 
   const networks = ['ethereum', 'bsc', 'arbitrum', 'base'];
   for (const network of networks) {
-    console.log(bold(green(`🌐 Monitoring Network: ${network.toUpperCase()}`)));
+    logger.info(`Monitoring Network: ${network.toUpperCase()}`);
     await processNetworkTransfer(network);
   }
 
-  console.log(green(`\n🕒 Monitoring interval: ${MONITORING_INTERVAL / 1000} seconds.\n`));
+  logger.info(`Monitoring interval: ${MONITORING_INTERVAL / 1000} seconds.`);
 };
 
 // Jalankan fungsi monitoring dengan interval yang diatur
 if (require.main === module) {
   setInterval(() => {
-    console.clear(); // Bersihkan layar untuk efek dinamis
-    console.log(bold(green(`HACKER TERMINAL - AUTO TRANSFER`)));
-    console.log(bold(green(`==============================`)));
+    console.clear();
+    logger.info(`HACKER TERMINAL - AUTO TRANSFER`);
+    logger.info(`==============================`);
     main().catch((err) => {
-      console.error(red(`❌ Error in main function: ${err.message}`));
+      logger.error(`Error in main function: ${err.message}`);
     });
   }, MONITORING_INTERVAL);
 }
