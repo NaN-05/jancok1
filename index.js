@@ -28,22 +28,16 @@ const getNetworkConfig = (networkName) => {
 const MIN_TRANSFER_AMOUNT = ethers.parseEther(process.env.MIN_TRANSFER_AMOUNT || '0.001'); // Default 0.001 ETH
 const MONITORING_INTERVAL = parseInt(process.env.MONITORING_INTERVAL, 10) || 60000; // Default 60 detik
 
-// Fungsi untuk menampilkan header
-const showHeader = () => {
-  console.log(`
-========================================
- 🚀 Welcome to Auto Transfer Script 🚀
-========================================
-`);
+// Fungsi untuk mencetak log ke bawah
+const logToConsole = (message) => {
+  console.log(`\x1b[32m${message}\x1b[0m`); // Teks hijau
 };
 
 // Fungsi untuk memproses transfer di jaringan tertentu
 const processNetworkTransfer = async (networkName) => {
-  console.log(`\n🌐 Monitoring Network: ${networkName.toUpperCase()}`);
   const networkConfig = getNetworkConfig(networkName);
-
   if (!networkConfig || !networkConfig.rpcUrl || !networkConfig.chainId) {
-    console.log(`❌ Invalid network configuration for: ${networkName}`);
+    logToConsole(`❌ Invalid network configuration for: ${networkName}`);
     return;
   }
 
@@ -53,10 +47,12 @@ const processNetworkTransfer = async (networkName) => {
 
   try {
     const balance = await provider.getBalance(depositWalletAddress);
-    console.log(`[${networkName}] 💰 Current balance: ${ethers.formatEther(balance)} ETH`);
+    const formattedBalance = ethers.formatEther(balance);
+
+    logToConsole(`[${networkName}] 💰 Current balance: ${formattedBalance} ETH`);
 
     if (balance >= MIN_TRANSFER_AMOUNT) {
-      console.log(`[${networkName}] ⚡ Balance meets the minimum transfer requirement.`);
+      logToConsole(`[${networkName}] ⚡ Balance meets the minimum transfer requirement.`);
       const feeData = await provider.getFeeData();
       const gasPrice = (feeData.gasPrice || feeData.maxFeePerGas) * BigInt(12) / BigInt(10); // Tambahkan buffer 20%
 
@@ -75,23 +71,20 @@ const processNetworkTransfer = async (networkName) => {
           gasPrice,
         };
 
-        console.log(`[${networkName}] 🚀 Sending transaction...`);
         const txResponse = await depositWallet.sendTransaction(txDetails);
-
-        console.log(`[${networkName}] 🔗 Transaction sent: ${txResponse.hash}`);
         const receipt = await txResponse.wait();
 
-        console.log(
+        logToConsole(
           `[${networkName}] ✅ Transaction confirmed in block ${receipt.blockNumber}. Transferred to ${process.env.VAULT_WALLET_ADDRESS}`
         );
       } else {
-        console.log(`[${networkName}] ⚠️ Insufficient balance to cover gas fees.`);
+        logToConsole(`[${networkName}] ⚠️ Insufficient balance to cover gas fees.`);
       }
     } else {
-      console.log(`[${networkName}] ⚠️ Balance is below the minimum transfer amount.`);
+      logToConsole(`[${networkName}] ⚠️ Balance is below the minimum transfer amount.`);
     }
   } catch (err) {
-    console.error(`[${networkName}] ❌ Error: ${err.message}`);
+    logToConsole(`[${networkName}] ❌ Error: ${err.message}`);
   }
 };
 
@@ -99,20 +92,23 @@ const processNetworkTransfer = async (networkName) => {
 const main = async () => {
   const networks = ['ethereum', 'bsc', 'arbitrum', 'base'];
   console.clear(); // Membersihkan layar
-  showHeader();
 
-  for (const networkName of networks) {
-    await processNetworkTransfer(networkName);
+  networks.forEach((network) => {
+    logToConsole(`🌐 Monitoring Network: ${network.toUpperCase()}`);
+  });
+
+  for (const network of networks) {
+    await processNetworkTransfer(network);
   }
 
-  console.log(`\n🕒 Monitoring interval: ${MONITORING_INTERVAL / 1000} seconds.\n`);
+  logToConsole(`\n🕒 Monitoring interval: ${MONITORING_INTERVAL / 1000} seconds.\n`);
 };
 
 // Jalankan fungsi monitoring dengan interval yang diatur
 if (require.main === module) {
   setInterval(() => {
     main().catch((err) => {
-      console.error('❌ Error in main function:', err);
+      console.error(`❌ Error in main function: ${err.message}`);
     });
   }, MONITORING_INTERVAL);
 }
