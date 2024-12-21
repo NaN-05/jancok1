@@ -31,24 +31,15 @@ const MONITORING_INTERVAL = parseInt(process.env.MONITORING_INTERVAL, 10) || 600
 // Fungsi untuk menampilkan header
 const showHeader = () => {
   console.log(`
-  ========================================
-   🚀 SABAR ADALAH EMAS 🚀
-  ========================================
-  `);
-};
-
-// Fungsi untuk menampilkan divider per jaringan
-const showDivider = (networkName) => {
-  console.log(`
-  ----------------------------------------
-   🌐 Monitoring Network: ${networkName.toUpperCase()}
-  ----------------------------------------
-  `);
+========================================
+ 🚀 Welcome to Auto Transfer Script 🚀
+========================================
+`);
 };
 
 // Fungsi untuk memproses transfer di jaringan tertentu
 const processNetworkTransfer = async (networkName) => {
-  showDivider(networkName);
+  console.log(`\n🌐 Monitoring Network: ${networkName.toUpperCase()}`);
   const networkConfig = getNetworkConfig(networkName);
 
   if (!networkConfig || !networkConfig.rpcUrl || !networkConfig.chainId) {
@@ -107,19 +98,18 @@ const processNetworkTransfer = async (networkName) => {
 // Fungsi utama untuk iterasi melalui semua jaringan
 const main = async () => {
   const networks = ['ethereum', 'bsc', 'arbitrum', 'base'];
-  console.log(`\n🔄 Starting monitoring process for all networks...\n`);
+  console.clear(); // Membersihkan layar
+  showHeader();
 
   for (const networkName of networks) {
     await processNetworkTransfer(networkName);
   }
 
-  console.log('\n✅ Monitoring process completed for all networks.');
+  console.log(`\n🕒 Monitoring interval: ${MONITORING_INTERVAL / 1000} seconds.\n`);
 };
 
 // Jalankan fungsi monitoring dengan interval yang diatur
 if (require.main === module) {
-  showHeader();
-  console.log(`🕒 Monitoring interval set to ${MONITORING_INTERVAL / 1000} seconds.\n`);
   setInterval(() => {
     main().catch((err) => {
       console.error('❌ Error in main function:', err);
